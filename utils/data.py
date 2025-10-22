@@ -5,12 +5,16 @@ import logging
 import threading
 from datetime import datetime
 
+#To ensure only on thread is written at a time in database.
 db_lock = threading.Lock()
 
+
+#Removes terminal color codes and escape sequences from ADB or shell outputs.
 def remove_ansi_escape_codes(text):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
+#Converts memory strings(1G->1024MB)
 def parse_top_memory(value_str):
     value_str = value_str.upper().strip()
     if value_str.endswith("G"):
@@ -22,6 +26,8 @@ def parse_top_memory(value_str):
     else:
         return int(value_str)
 
+
+#Extracts Logs
 def parse_top_summary(lines, device_serial=None):
     data = {}
     if len(lines) < 7:
@@ -29,26 +35,31 @@ def parse_top_summary(lines, device_serial=None):
         return None
 
     try:
+        #Extract Task Count
         task_line = lines[0].replace('Tasks:', '').replace(',', '')
         task_matches = re.findall(r'(\d+)\s+(\w+)', task_line)
         for value, label in task_matches:
             data[f'tasks_{label.lower()}'] = int(value)
-
+        
+        # Extract Memory
         mem_line = lines[2] if 'Mem:' in lines[2] else lines[1]
         mem_matches = re.findall(r'(\d+[KMG]?)\s+(\w+)', mem_line)
         for value_str, label in mem_matches:
             data[f'mem_{label.lower()}'] = parse_top_memory(value_str)
-
+        
+        #Extract Swap Info
         swap_line_index = 3 if mem_line == lines[2] else 2
         swap_matches = re.findall(r'(\d+)K\s+(\w+)', lines[swap_line_index])
         for value, label in swap_matches:
             data[f'swap_{label.lower()}'] = int(value)
 
+        #Extract CPU usage
         cpu_line = lines[6]
         cpu_matches = re.findall(r'(\d+)%(\w+)', cpu_line)
         for value, label in cpu_matches:
             data[f'cpu_{label.lower()}'] = int(value)
 
+        # Store TimeStamp and Device Info
         data['timestamp'] = datetime.now()
         if device_serial:
             data['device_serial'] = device_serial
@@ -58,6 +69,8 @@ def parse_top_summary(lines, device_serial=None):
         logging.error(f"Parsing failed: {e}")
         return None
 
+
+#Creates the SQLite database and the table schema.
 def initialize_database():
     root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     db_path = os.path.join(root_dir, 'app.db')
@@ -103,6 +116,8 @@ def initialize_database():
     logging.info("Database initialized successfully.")
     return db_path
 
+
+#inserts one complete record
 def save_data_to_db(data_point):
     db_path = DATABASE_PATH
     try:
