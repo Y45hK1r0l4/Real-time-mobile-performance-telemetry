@@ -3,8 +3,7 @@ import pandas as pd
 import threading
 import time
 from utils.data import save_data_to_db, remove_ansi_escape_codes, parse_top_summary
-from utils.adb import get_battery_status
-from utils.adb import run_adb_command
+from utils.adb import get_battery_status, run_adb_command, get_cpu_temperature
 
 
 class MonitoringController:
@@ -13,9 +12,7 @@ class MonitoringController:
         self.state = monitoring_state
         self.notification_manager = None
 
-    def start_monitoring(
-        self, interval=5, selected_device_id=None, monitoring_interval=2
-    ):
+    def start_monitoring(self, interval=5, selected_device_id=None, monitoring_interval=2):
         if self.state.monitoring_active:
             logging.warning("Monitoring already active.")
             return False
@@ -32,9 +29,7 @@ class MonitoringController:
         self.state.monitoring_thread.daemon = True
         self.state.monitoring_thread.start()
 
-        logging.info(
-            f"Started monitoring with {self.state.monitoring_interval}s interval."
-        )
+        logging.info(f"Started monitoring with {self.state.monitoring_interval}s interval.")
         return True
 
     def stop_monitoring(self):
@@ -64,25 +59,17 @@ class MonitoringController:
 
     def _handle_paused_state(self):
         """Handle monitoring when in paused state (reconnection)"""
-        logging.info(
-            f"Entering Paused state with a timeout of {self.state.max_pause_duration}"
-        )
-        logging.info(
-            f"Time left until waiting timeout : {self.state.pause_start_time + self.state.max_pause_duration - time.time()}"
-        )
+        logging.info(f"Entering Paused state with a timeout of {self.state.max_pause_duration}")
+        logging.info(f"Time left until waiting timeout : {self.state.pause_start_time + self.state.max_pause_duration - time.time()}")
         if self.notification_manager:
-            self.notification_manager.set_notification(
-                "Monitoring paused.", "notification-error", 4
-            )
+            self.notification_manager.set_notification("Monitoring paused.", "notification-error", 4)
+
         # Check for timeout
         if (
             self.state.pause_start_time
-            and (time.time() - self.state.pause_start_time)
-            > self.state.max_pause_duration
+            and (time.time() - self.state.pause_start_time) > self.state.max_pause_duration
         ):
-            logging.warning(
-                f"Device reconnection timed out after {self.state.max_pause_duration} seconds. Stopping monitoring."
-            )
+            logging.warning(f"Device reconnection timed out after {self.state.max_pause_duration} seconds. Stopping monitoring.")
             if self.notification_manager:
                 self.notification_manager.set_notification(
                     "Monitoring stopped due to wait timeout.", "notification-error", 5
@@ -94,9 +81,7 @@ class MonitoringController:
 
         # Try to reconnect
         current_serial = self.connection_manager.device_info["persistent_id"]
-        best_device_id, conn_type = self.connection_manager.find_device_connection(
-            current_serial
-        )
+        best_device_id, conn_type = self.connection_manager.find_device_connection(current_serial)
 
         if best_device_id:
             self.connection_manager.device_info["device_id"] = best_device_id
@@ -106,9 +91,7 @@ class MonitoringController:
                 self.state.monitoring_paused = False
                 self.state.pause_start_time = None
                 self.state.reconnection_success = True
-                logging.info(
-                    f"Successfully reconnected to device {current_serial} via {conn_type}"
-                )
+                logging.info(f"Successfully reconnected to device {current_serial} via {conn_type}")
                 if self.notification_manager:
                     self.notification_manager.set_notification(
                         f"Successfully reconnected to device {current_serial} via {conn_type}",
@@ -137,18 +120,12 @@ class MonitoringController:
         current_serial = self.connection_manager.device_info["persistent_id"]
         logging.warning(f"Device connection lost for {current_serial}")
 
-        best_device_id, conn_type = self.connection_manager.find_device_connection(
-            current_serial
-        )
+        best_device_id, conn_type = self.connection_manager.find_device_connection(current_serial)
 
-        if best_device_id and self.connection_manager.check_device_connection(
-            best_device_id
-        ):
+        if best_device_id and self.connection_manager.check_device_connection(best_device_id):
             self.connection_manager.device_info["device_id"] = best_device_id
             self.connection_manager.device_info["connection_type"] = conn_type
-            logging.info(
-                f"Reconnected to same device via {conn_type}: {best_device_id}"
-            )
+            logging.info(f"Reconnected to same device via {conn_type}: {best_device_id}")
         else:
             self.state.monitoring_paused = True
             self.state.pause_start_time = time.time()
@@ -157,22 +134,16 @@ class MonitoringController:
 
     def _collect_device_data(self):
         """Collect and process device data"""
-
         max_retries = 3
         retry_delay = 1
 
         for attempt in range(max_retries):
             try:
-                raw_output = run_adb_command(
-                    ["shell", "top", "-n", "1"],
-                    self.connection_manager.device_info["device_id"],
-                )
+                raw_output = run_adb_command(["shell", "top", "-n", "1"], self.connection_manager.device_info["device_id"])
 
                 if not raw_output:
                     if attempt < max_retries - 1:
-                        logging.warning(
-                            f"No output received. Retry {attempt + 1}/{max_retries}..."
-                        )
+                        logging.warning(f"No output received. Retry {attempt + 1}/{max_retries}...")
                         time.sleep(retry_delay)
                         continue
                     else:
@@ -186,48 +157,44 @@ class MonitoringController:
                     lines,
                     device_serial=self.connection_manager.device_info["persistent_id"],
                 )
+
                 if data:
                     device_id = self.connection_manager.device_info["device_id"]
                     conn_type = "Wi-Fi" if ":" in device_id else "USB"
-                    if (
-                        conn_type
-                        != self.connection_manager.device_info["connection_type"]
-                    ):
-                        self.connection_manager.device_info["connection_type"] = (
-                            conn_type
-                        )
+                    if conn_type != self.connection_manager.device_info["connection_type"]:
+                        self.connection_manager.device_info["connection_type"] = conn_type
 
                     data["model"] = self.connection_manager.device_info["model"]
-                    data["connection_type"] = self.connection_manager.device_info[
-                        "connection_type"
-                    ]
+                    data["connection_type"] = self.connection_manager.device_info["connection_type"]
 
-                    # ==== Add new metrics fetching here ====
+                    # ==== New metrics fetching ====
                     battery_data = get_battery_status(device_id)
                     data["battery_level"] = battery_data.get("level", None)
                     data["battery_temp"] = battery_data.get("temperature", None)
 
+                    # 🧠 CPU Temperature
+                    cpu_temp = get_cpu_temperature(device_id)
+                    data["cpu_temp"] = cpu_temp
+                    logging.debug(f"CPU temperature collected: {cpu_temp}°C")
+
                     # ==== End new metrics ====
 
+                    # Save to local DB if enabled
                     if self.state.save_to_local_db:
                         save_data_to_db(data)
 
+                    # Device change handling and add to in-memory state
                     self._handle_device_change()
-
                     self.state.add_data_point(data)
 
                 break
 
             except Exception as e:
                 if attempt < max_retries - 1:
-                    logging.warning(
-                        f"Error collecting data: {e}. Retry {attempt + 1}/{max_retries}..."
-                    )
+                    logging.warning(f"Error collecting data: {e}. Retry {attempt + 1}/{max_retries}...")
                     time.sleep(retry_delay)
                 else:
-                    logging.error(
-                        f"Failed to collect data after {max_retries} attempts: {e}"
-                    )
+                    logging.error(f"Failed to collect data after {max_retries} attempts: {e}")
 
     def _handle_device_change(self):
         """Handle case when monitored device has changed"""
@@ -235,22 +202,15 @@ class MonitoringController:
             self.connection_manager.device_info["last_device_serial"] = (
                 self.connection_manager.device_info["persistent_id"]
             )
-        elif (
-            self.connection_manager.device_info["last_device_serial"]
-            != self.connection_manager.device_info["persistent_id"]
-        ):
+        elif self.connection_manager.device_info["last_device_serial"] != self.connection_manager.device_info["persistent_id"]:
             self.state.total_points = 0
             logging.info(
                 f"Device changed from {self.connection_manager.device_info['last_device_serial']} to {self.connection_manager.device_info['persistent_id']}, clearing plot data"
             )
-            self.state.collected_data.drop(
-                self.state.collected_data.index, inplace=True
-            )
+            self.state.collected_data.drop(self.state.collected_data.index, inplace=True)
             self.connection_manager.device_info["last_device_serial"] = (
                 self.connection_manager.device_info["persistent_id"]
             )
-
-    
 
 
 class MonitoringState:
@@ -281,7 +241,7 @@ class MonitoringState:
         self.monitoring_active = False
         self.auto_stopped = False
         self.reset_reconnection_state()
-        
+
     def clear_data(self):
         """Clear collected data"""
         self.collected_data.drop(self.collected_data.index, inplace=True)
@@ -289,18 +249,12 @@ class MonitoringState:
         logging.info("Data cleared.")
         return True
 
-
     def add_data_point(self, data):
         new_df = pd.DataFrame([data])
-        self.collected_data = pd.concat(
-            [self.collected_data, new_df], ignore_index=True
-        )
+        self.collected_data = pd.concat([self.collected_data, new_df], ignore_index=True)
         self.total_points += 1
-        # Debug print all keys and CPU info
         logging.debug(f"Added data point {self.total_points}, keys: {list(data.keys())}")
         cpu_keys = [k for k in data.keys() if k.startswith('cpu_')]
-        logging.debug(f"CPU metric keys with values: {{}}".format(
-            {k:data[k] for k in cpu_keys}))
+        logging.debug(f"CPU metric keys with values: {{}}".format({k: data[k] for k in cpu_keys}))
         if len(self.collected_data) > 100:
             self.collected_data = self.collected_data.iloc[-100:]
-
