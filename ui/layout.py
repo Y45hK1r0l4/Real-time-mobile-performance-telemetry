@@ -1,4 +1,5 @@
 from dash import dcc, html
+import dash_daq as daq
 
 def create_layout():
     layout = html.Div([
@@ -37,7 +38,7 @@ def create_layout():
                 html.Div([
                     html.Div(id="device-id-title", className="device-id-title"),
                     html.Div(id="device-id-conn", className="device-id-conn")
-                ], className="device-id-container"),     # <--- device name, always at sidebar top
+                ], className="device-id-container"),
 
                 html.Div([
                     html.Div([
@@ -49,7 +50,7 @@ def create_layout():
                         ),
                         html.Div([
                             html.Button('Refresh', id='refresh-button', n_clicks=0, className="btn"),
-                            html.Button('Wi‑Fi Connect', id='wifi-connect-button', n_clicks=0, className="btn secondary"),
+                            html.Button('Wi-Fi Connect', id='wifi-connect-button', n_clicks=0, className="btn secondary"),
                         ], className="row gap")
                     ])
                 ], className="card"),
@@ -99,6 +100,7 @@ def create_layout():
 
             # Right panel
             html.Div([
+                # Main performance graph
                 html.Div([
                     dcc.Graph(
                         id='app-plot',
@@ -106,6 +108,8 @@ def create_layout():
                         config={"displayModeBar": False}
                     )
                 ], className="card stretch"),
+
+                # Mini metrics and temperature gauge
                 html.Div([
                     html.Div([
                         html.Div([
@@ -132,7 +136,30 @@ def create_layout():
                             html.Div("Battery", className="mini-k"),
                             html.Div(id="mini-batt-level", className="mini-v")
                         ], className="mini"),
-                    ], className="mini-grid")
+                    ], className="mini-grid"),
+
+                    # CPU Temperature Gauge (new)
+                    html.Div([
+                        daq.Gauge(
+                            id='cpu-temp-gauge',
+                            label='CPU Temp (°C)',
+                            min=0,
+                            max=100,
+                            value=0,
+                            units='°C',
+                            showCurrentValue=True,
+                            color={
+                                "gradient": True,
+                                "ranges": {
+                                    "blue": [0, 45],
+                                    "yellow": [45, 70],
+                                    "red": [70, 100]
+                                }
+                            },
+                            size=200,
+                            className="cpu-temp-gauge"
+                        )
+                    ], className="card center")
                 ], className="card"),
             ], className="col right"),
         ], className="grid-2"),
