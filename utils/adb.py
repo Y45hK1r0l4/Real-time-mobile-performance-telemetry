@@ -6,7 +6,7 @@ import os
 
 logging.basicConfig(level=logging.INFO, format="%(name)s: %(asctime)s | %(levelname)s | %(filename)s:%(lineno)s >>> %(message)s", datefmt="%d-%m-%YT%H:%M:%SZ")
 
-
+# Run adb commands.
 def run_adb_command(cmd, device_id=None):
     """Run an adb command and return the output."""
     base_cmd = ['adb']
@@ -20,6 +20,7 @@ def run_adb_command(cmd, device_id=None):
         logging.error(f"Command {cmd} timed out.")
         return None
 
+# To get the connected devices
 def get_connected_device():
     """Get the connected USB device."""
     output = run_adb_command(['devices'])
@@ -34,6 +35,7 @@ def get_connected_device():
     logging.debug("No USB device found.")
     return None
 
+# get the serial number of device
 def get_device_serial_number(device_id):
     """ Get the actual serial number of the device. """
     try:
@@ -50,6 +52,7 @@ def get_device_serial_number(device_id):
         logging.error(f"Exception while retrieving serial number: {e}")
         return None
 
+#Gets unique devices(no repetitions)
 def get_unique_devices():
     result = subprocess.run(['adb', 'devices'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     
@@ -86,15 +89,18 @@ def get_unique_devices():
     
     return devices
 
+# Extract model of device
 def get_device_model(device_id):
     output = run_adb_command(['shell', 'getprop', 'ro.product.model'], device_id)
     return output.strip() if output else 'Unknown'
 
+# Extract ip of device
 def get_device_ip(device_id):
     output = run_adb_command(['shell', 'ip', 'addr', 'show', 'wlan0'], device_id)
     match = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)', output)
     return match.group(1) if match else None
 
+# Establish connection through wifi.
 def connect_wifi_adb(device_id, ip, port=5555):
     logging.info(f"Enabling ADB over TCP/IP on port {port}...")
     run_adb_command(['tcpip', str(port)], device_id)
@@ -107,10 +113,13 @@ def connect_wifi_adb(device_id, ip, port=5555):
     logging.error(f"Could not connect to {ip}:{port}: {output}")
     return False
 
+# Get serial number of device
 def get_device_serial(device_id):
     output = run_adb_command(['shell', 'getprop', 'ro.serialno'], device_id)
     return output.strip() if output else None
 
+
+# Check number of initial devices connected during startup
 def check_initial_devices():
     try:
         output = run_adb_command(['devices'])
@@ -126,6 +135,7 @@ def check_initial_devices():
         logging.error(f"Error checking initial devices: {e}")
         return False
     
+# To Check the battery status
 def get_battery_status(device_id):
     output = run_adb_command(['shell', 'dumpsys', 'battery'], device_id)
     battery_info = {}
