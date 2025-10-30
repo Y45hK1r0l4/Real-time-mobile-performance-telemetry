@@ -172,8 +172,5 @@ if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     DATABASE_PATH = initialize_database()
 else:
     DATABASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'adb_monitor.db')
-<<<<<<< Updated upstream
-=======
-#good
-#very good
->>>>>>> Stashed changes
+#Updated upstream
+#Stashed changes
