@@ -82,7 +82,8 @@ def create_layout():
                                 {'label': 'CPU', 'value': 'cpu'},
                                 {'label': 'Memory', 'value': 'mem'},
                                 {'label': 'Task', 'value': 'task'},
-                                {'label': 'Battery', 'value': 'battery'}
+                                {'label': 'Battery', 'value': 'battery'},
+                                {"label": "Swap", "value": "swap"},
                             ], value='cpu', clearable=False, searchable=False,
                             className="ddl sm"
                         ),

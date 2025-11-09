@@ -216,6 +216,11 @@ def register_callbacks(
                 "all_metrics": ["battery_level", "battery_temp"],
                 "ylabel": "Battery",
                 "max": 100,
+            },
+            "swap": {
+                "all_metrics": ["swap_total", "swap_used", "swap_free", "swap_cached"],
+                "ylabel": "Swap (MB)",
+                "max": 1024 
             }
         }
 
@@ -234,13 +239,17 @@ def register_callbacks(
         # Add traces for all selected metrics
         if not df.empty:
             for m in metrics:
-                if m in df.columns:
-                    name = m.replace("cpu_", "").replace("mem_", "").replace("tasks_", "").capitalize()
-                    fig.add_trace(
-                        go.Scatter(
-                            x=df["timestamp"], y=df[m], mode="lines+markers", name=name
-                        )
+                name = m.replace("swap_", "").capitalize()
+                ydata = df[m] if m in df.columns else [0] * len(df)
+                fig.add_trace(
+                    go.Scatter(
+                        x=df["timestamp"],
+                        y=ydata,
+                        mode="lines+markers",
+                        name=name
                     )
+                )
+
         fig.update_layout(
             title="",
             xaxis_title="Time",
@@ -294,6 +303,13 @@ def register_callbacks(
                 {"label": "Sleeping Tasks", "value": "tasks_sleeping"},
                 {"label": "Stopped Tasks", "value": "tasks_stopped"},
                 {"label": "Zombie Tasks", "value": "tasks_zombie"},
+            ]
+        elif metric_category == "swap":
+            metrics = [
+                {"label": "Swap Total", "value": "swap_total"},
+                {"label": "Swap Used", "value": "swap_used"},
+                {"label": "Swap Free", "value": "swap_free"},
+                {"label": "Swap Cached", "value": "swap_cached"},
             ]
         else:
             metrics = []
