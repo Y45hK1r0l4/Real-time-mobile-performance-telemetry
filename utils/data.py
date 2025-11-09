@@ -33,7 +33,6 @@ def parse_top_summary(lines, device_serial=None):
     if len(lines) < 7:
         logging.error("Insufficient top output lines.")
         return None
-
     try:
         #Extract Task Count
         task_line = lines[0].replace('Tasks:', '').replace(',', '')
@@ -79,26 +78,46 @@ def initialize_database():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
+    # Devices table to track devices
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS device_metrics (
+    CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL,
-        device_serial TEXT NOT NULL,
+        device_serial TEXT UNIQUE NOT NULL,
         model TEXT,
         connection_type TEXT,
-        tasks_total INTEGER,
-        tasks_running INTEGER,
-        tasks_sleeping INTEGER,
-        tasks_stopped INTEGER,
-        tasks_zombie INTEGER,
-        mem_total INTEGER,
-        mem_used INTEGER,
-        mem_free INTEGER,
-        mem_buffers INTEGER,
-        swap_total INTEGER,
-        swap_used INTEGER,
-        swap_free INTEGER,
-        swap_cached INTEGER,
+        cpu_table TEXT,
+        memory_table TEXT,
+        tasks_table TEXT,
+        swap_table TEXT,
+        battery_table TEXT
+    )
+    ''')
+
+    # Check for missing columns and add if necessary
+    cursor.execute("PRAGMA table_info(devices);")
+    existing_cols = [r[1] for r in cursor.fetchall()]
+    for col in ['cpu_table', 'memory_table', 'tasks_table', 'swap_table', 'battery_table']:
+        if col not in existing_cols:
+            cursor.execute(f"ALTER TABLE devices ADD COLUMN {col} TEXT;")
+
+    conn.commit()
+    conn.close()
+    logging.info("Database initialized successfully.")
+    return db_path
+
+def create_device_tables(conn, device_serial):
+    sanitized = re.sub(r'\W+', '_', device_serial.lower())
+    cpu_table = f"{sanitized}_cpu"
+    memory_table = f"{sanitized}_memory"
+    tasks_table = f"{sanitized}_tasks"
+    swap_table = f"{sanitized}_swap"
+    battery_table = f"{sanitized}_battery"
+
+    cursor = conn.cursor()
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {cpu_table} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
         cpu_cpu INTEGER,
         cpu_user INTEGER,
         cpu_nice INTEGER,
@@ -110,11 +129,65 @@ def initialize_database():
         cpu_host INTEGER
     )
     ''')
-
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {memory_table} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        mem_total INTEGER,
+        mem_used INTEGER,
+        mem_free INTEGER,
+        mem_buffers INTEGER
+    )
+    ''')
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {tasks_table} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        tasks_total INTEGER,
+        tasks_running INTEGER,
+        tasks_sleeping INTEGER,
+        tasks_stopped INTEGER,
+        tasks_zombie INTEGER
+    )
+    ''')
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {swap_table} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        swap_total INTEGER,
+        swap_used INTEGER,
+        swap_free INTEGER,
+        swap_cached INTEGER
+    )
+    ''')
+    cursor.execute(f'''
+    CREATE TABLE IF NOT EXISTS {battery_table} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        battery_level INTEGER,
+        battery_health TEXT,
+        battery_temperature REAL,
+        charging_status TEXT
+    )
+    ''')
     conn.commit()
-    conn.close()
-    logging.info("Database initialized successfully.")
-    return db_path
+    return cpu_table, memory_table, tasks_table, swap_table, battery_table
+
+def get_or_create_device(conn, device_serial, model='Unknown', connection_type='Unknown'):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, cpu_table, memory_table, tasks_table, swap_table, battery_table FROM devices WHERE device_serial=?", (device_serial,))
+    row = cursor.fetchone()
+    if row:
+        return row
+    else:
+        cpu_table, memory_table, tasks_table, swap_table, battery_table = create_device_tables(conn, device_serial)
+        cursor.execute('''
+        INSERT INTO devices (device_serial, model, connection_type, cpu_table, memory_table, tasks_table, swap_table, battery_table)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (device_serial, model, connection_type, cpu_table, memory_table, tasks_table, swap_table, battery_table))
+        conn.commit()
+        device_id = cursor.lastrowid
+        return (device_id, cpu_table, memory_table, tasks_table, swap_table, battery_table)
 
 
 #inserts one complete record
@@ -123,43 +196,82 @@ def save_data_to_db(data_point):
     try:
         with db_lock:
             conn = sqlite3.connect(db_path, timeout=30)
+            device_serial = data_point.get('device_serial', 'unknown')
+            model = data_point.get('model', 'Unknown')
+            connection_type = data_point.get('connection_type', 'Unknown')
+            device_id, cpu_table, memory_table, tasks_table, swap_table, battery_table = get_or_create_device(conn, device_serial, model, connection_type)
+
+            timestamp = data_point['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
             cursor = conn.cursor()
 
-            fields = {
-                'timestamp': data_point['timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
-                'device_serial': data_point.get('device_serial', 'unknown'),
-                'model': data_point.get('model', 'Unknown'),
-                'connection_type': data_point.get('connection_type', 'Unknown'),
-                'tasks_total': data_point.get('tasks_total', 0),
-                'tasks_running': data_point.get('tasks_running', 0),
-                'tasks_sleeping': data_point.get('tasks_sleeping', 0),
-                'tasks_stopped': data_point.get('tasks_stopped', 0),
-                'tasks_zombie': data_point.get('tasks_zombie', 0),
-                'mem_total': data_point.get('mem_total', 0),
-                'mem_used': data_point.get('mem_used', 0),
-                'mem_free': data_point.get('mem_free', 0),
-                'mem_buffers': data_point.get('mem_buffers', 0),
-                'swap_total': data_point.get('swap_total', 0),
-                'swap_used': data_point.get('swap_used', 0),
-                'swap_free': data_point.get('swap_free', 0),
-                'swap_cached': data_point.get('swap_cached', 0),
-                'cpu_cpu': data_point.get('cpu_cpu', 0),
-                'cpu_user': data_point.get('cpu_user', 0),
-                'cpu_nice': data_point.get('cpu_nice', 0),
-                'cpu_sys': data_point.get('cpu_sys', 0),
-                'cpu_idle': data_point.get('cpu_idle', 0),
-                'cpu_iow': data_point.get('cpu_iow', 0),
-                'cpu_irq': data_point.get('cpu_irq', 0),
-                'cpu_sirq': data_point.get('cpu_sirq', 0),
-                'cpu_host': data_point.get('cpu_host', 0)
-            }
+            cursor.execute(f'''
+                INSERT INTO {cpu_table} (
+                    timestamp, cpu_cpu, cpu_user, cpu_nice, cpu_sys, cpu_idle,
+                    cpu_iow, cpu_irq, cpu_sirq, cpu_host
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                timestamp,
+                data_point.get('cpu_cpu', 0),
+                data_point.get('cpu_user', 0),
+                data_point.get('cpu_nice', 0),
+                data_point.get('cpu_sys', 0),
+                data_point.get('cpu_idle', 0),
+                data_point.get('cpu_iow', 0),
+                data_point.get('cpu_irq', 0),
+                data_point.get('cpu_sirq', 0),
+                data_point.get('cpu_host', 0),
+            ))
 
-            columns = ', '.join(fields.keys())
-            placeholders = ', '.join(['?'] * len(fields))
-            values = tuple(fields.values())
+            cursor.execute(f'''
+                INSERT INTO {memory_table} (
+                    timestamp, mem_total, mem_used, mem_free, mem_buffers
+                ) VALUES (?, ?, ?, ?, ?)
+            ''', (
+                timestamp,
+                data_point.get('mem_total', 0),
+                data_point.get('mem_used', 0),
+                data_point.get('mem_free', 0),
+                data_point.get('mem_buffers', 0),
+            ))
 
-            query = f"INSERT INTO device_metrics ({columns}) VALUES ({placeholders})"
-            cursor.execute(query, values)
+            cursor.execute(f'''
+                INSERT INTO {tasks_table} (
+                    timestamp, tasks_total, tasks_running, tasks_sleeping,
+                    tasks_stopped, tasks_zombie
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                timestamp,
+                data_point.get('tasks_total', 0),
+                data_point.get('tasks_running', 0),
+                data_point.get('tasks_sleeping', 0),
+                data_point.get('tasks_stopped', 0),
+                data_point.get('tasks_zombie', 0),
+            ))
+
+            cursor.execute(f'''
+                INSERT INTO {swap_table} (
+                    timestamp, swap_total, swap_used, swap_free, swap_cached
+                ) VALUES (?, ?, ?, ?, ?)
+            ''', (
+                timestamp,
+                data_point.get('swap_total', 0),
+                data_point.get('swap_used', 0),
+                data_point.get('swap_free', 0),
+                data_point.get('swap_cached', 0),
+            ))
+
+            if any(key in data_point for key in ['battery_level', 'battery_health', 'battery_temperature', 'charging_status']):
+                cursor.execute(f'''
+                    INSERT INTO {battery_table} (
+                        timestamp, battery_level, battery_health, battery_temperature, charging_status
+                    ) VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    timestamp,
+                    data_point.get('battery_level'),
+                    data_point.get('battery_health'),
+                    data_point.get('battery_temperature'),
+                    data_point.get('charging_status'),
+                ))
 
             conn.commit()
             conn.close()
@@ -172,5 +284,4 @@ if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     DATABASE_PATH = initialize_database()
 else:
     DATABASE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'adb_monitor.db')
-#Updated upstream
-#Stashed changes
+
