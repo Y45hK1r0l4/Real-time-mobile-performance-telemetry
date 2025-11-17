@@ -1,6 +1,6 @@
 import dash
 import logging
-import sys
+import sys 
 import os
 
 from utils.manager import ConnectionManager
