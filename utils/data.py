@@ -199,7 +199,7 @@ def save_data_to_db(data_point):
             device_serial = data_point.get('device_serial', 'unknown')
             model = data_point.get('model', 'Unknown')
             connection_type = data_point.get('connection_type', 'Unknown')
-            device_id, cpu_table, memory_table, tasks_table, swap_table, battery_table = get_or_create_device(conn, device_serial, model, connection_type)
+            device_id, cpu_table, memory_table, tasks_table, swap_table, battery_table = get_or_create_device(conn,model, model, connection_type)
 
             timestamp = data_point['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
             cursor = conn.cursor()
@@ -269,7 +269,7 @@ def save_data_to_db(data_point):
                     timestamp,
                     data_point.get('battery_level'),
                     data_point.get('battery_health'),
-                    data_point.get('battery_temperature'),
+                    data_point.get('battery_temp'),
                     data_point.get('charging_status'),
                 ))
 

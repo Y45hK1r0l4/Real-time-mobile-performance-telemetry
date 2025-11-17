@@ -206,6 +206,8 @@ class MonitoringController:
                     battery_data = get_battery_status(device_id)
                     data["battery_level"] = battery_data.get("level", None)
                     data["battery_temp"] = battery_data.get("temperature", None)
+                    data["charging_status"]=battery_data.get("charging_status",None)
+                    data["battery_health"]=battery_data.get("battery_health",None)
 
                     # ==== End new metrics ====
 
