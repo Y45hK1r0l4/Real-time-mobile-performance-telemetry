@@ -31,7 +31,7 @@ app.layout = create_layout()
 
 # Register all callbacks
 notification_manager = register_callbacks(app, connection_manager, monitoring_state, monitoring_controller)
-monitoring_controller.notification_manager = notification_managerpy
+monitoring_controller.notification_manager = notification_manager
 
 if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
