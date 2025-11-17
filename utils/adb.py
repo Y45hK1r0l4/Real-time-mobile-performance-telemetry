@@ -145,6 +145,37 @@ def get_battery_status(device_id):
             battery_info['level'] = int(line.split(':')[1].strip())
         elif line.startswith('temperature:'):
             battery_info['temperature'] = int(line.split(':')[1].strip()) / 10.0
+        elif line.startswith('status:'):
+            raw_status = line.split(':')[1].strip()
+
+            # Some devices output numeric codes (Android standard)
+            # 1=Unknown, 2=Charging, 3=Discharging, 4=Not Charging, 5=Full
+            mapping = {
+                "1": "Unknown",
+                "2": "Charging",
+                "3": "Discharging",
+                "4": "Not Charging",
+                "5": "Full"
+            }
+
+            # If numeric, convert using map; else assume it's already a word
+            battery_info['charging_status'] = mapping.get(raw_status, raw_status)
+        elif line.startswith('health:'):
+            raw_health = line.split(':')[1].strip()
+
+            # Android numeric health codes:
+            health_map = {
+                "1": "Unknown",
+                "2": "Good",
+                "3": "Overheat",
+                "4": "Dead",
+                "5": "Over Voltage",
+                "6": "Unspecified Failure",
+                "7": "Cold"
+            }
+
+            # If numeric, convert. Otherwise store raw text.
+            battery_info['battery_health'] = health_map.get(raw_health, raw_health)
     return battery_info
     
 
