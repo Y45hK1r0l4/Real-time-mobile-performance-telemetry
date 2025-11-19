@@ -5,7 +5,7 @@ import logging
 import threading
 from datetime import datetime
 
-#To ensure only on thread is written at a time in database.
+#To ensure only one thread is written at a time in database.
 db_lock = threading.Lock()
 
 
